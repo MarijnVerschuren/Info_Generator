@@ -80,7 +80,7 @@ class Mail:
 		intro:		str,
 		text:		str,
 		html:		str,
-		data:		str
+		data:		dict
 	) -> None:
 		self.__id =			_id
 		self.__from =		_from
@@ -245,13 +245,15 @@ class Person:
 		self.__address =		address
 		self.__mail_account =	mail_account
 
-	def __str__(self: object) -> str:				return f"{self.first_name} {self.last_name}\n{self.gender} {self.age}\n{self.mail_account}\n{self.address}"
+	def __str__(self: object) -> str:				return f"{self.name}\n{self.gender} {self.age}\n{self.mail_account}\n{self.address}"
 	def __repr__(self: object) -> str:				return f"<{self.first_name}, {self.last_name}, {self.gender}, {self.age}, {repr(self.address)}, {repr(self.mail_account)}>"
 
 	@property  # make all member variables read only
 	def first_name(self: object) -> str:			return self.__first_name
 	@property
 	def last_name(self: object) -> str:				return self.__last_name
+	@property
+	def name(self: object) -> str:					return f"{self.__first_name} {self.__last_name}"
 	@property
 	def gender(self: object) -> str:				return self.__gender
 	@property
@@ -265,7 +267,7 @@ class Person:
 	@property
 	def street(self: object) -> str:				return self.__address.street
 	@property
-	def number(self: object) -> str:				return self.__address.number
+	def house_number(self: object) -> str:			return self.__address.number
 	@property
 	def zip_code(self: object) -> str:				return self.__address.zip_code
 
