@@ -240,7 +240,7 @@ class Person:
 	) -> None:
 		self.__first_name =		first_name
 		self.__last_name =		last_name
-		self.__gender =			"Male" if gender == "M" else "Female"
+		self.__gender =			gender
 		self.__age =			age
 		self.__address =		address
 		self.__mail_account =	mail_account
