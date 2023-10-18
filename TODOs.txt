@@ -1,2 +1,4 @@
-https://docs.mail.tm
-https://juicysms.com/api
+analyze the image from thispersondoesnotexist.com
+and base the generated person of of it.
+https://www.geeksforgeeks.org/age-and-gender-detection-using-opencv-in-python/
+ - gen.py@344

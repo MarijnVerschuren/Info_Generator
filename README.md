@@ -27,6 +27,7 @@ last_name     str
 name          str
 gender        str
 age           int
+iban          str
 mail_address  str  (accessing mail_account)
 province      str  (accessing address)
 city          str  (accessing address)

@@ -1,12 +1,15 @@
 """
 		imports
 """
+import numpy as np
 import linecache
+import functools
 import requests
 import datetime
 import string
 import random
 import json
+import cv2
 import os
 
 
@@ -16,6 +19,7 @@ import os
 """
 DIR =											os.path.dirname(__file__)
 NAME_TABLE_PATH =								os.path.join(DIR, "names.json")
+IBAN_TABLE_PATH =								os.path.join(DIR, "iban.json")
 ADDRESS_TABLE_PATH =							os.path.join(DIR, "addresses.csv")
 MAIL_DOMAIN_TABLE_PATH =						os.path.join(DIR, "mail_domains.json")
 API_ADDRESS = "https://api.mail.tm"
@@ -23,7 +27,7 @@ JSON_HEADER = {
 	"accept": "application/ld+json",
 	"Content-Type": "application/json"
 }
-linecache.lazycache(ADDRESS_TABLE_PATH, None)	# lazy cache the address table
+linecache.lazycache(ADDRESS_TABLE_PATH, None)  # lazy cache the address table
 
 
 
@@ -31,9 +35,9 @@ linecache.lazycache(ADDRESS_TABLE_PATH, None)	# lazy cache the address table
 		exceptions
 """
 class account_requests_error(Exception):
-    """Raised if a POST on /accounts or /authorization_token return a failed status code."""
+	"""Raised if a POST on /accounts or /authorization_token return a failed status code."""
 class invalid_account_error(Exception):
-    """Raised if an account could not be recovered from the db file."""
+	"""Raised if an account could not be recovered from the db file."""
 
 
 
@@ -137,20 +141,20 @@ class Mail_Account:  # TODO: move out creation of accounts
 		cls.update_domains()
 		domain = cls.get_random_domain()
 
-		if random.uniform(0, 1) > 0.50:			username = f"{first_name}.{last_name}"	# 1/2
+		if random.uniform(0, 1) > 0.50:		username = f"{first_name}.{last_name}"	# 1/2
 		elif random.uniform(0, 1) > 0.5:		username = f"{first_name}_{last_name}"	# 1/4
-		else:									username = f"{first_name}{last_name}"	# 1/4
+		else:										username = f"{first_name}{last_name}"	# 1/4
 		if random.uniform(0, 1) > 0.75:
 			if random.uniform(0, 1) > 0.875:	username += f"_{age}"					# 1/4 * 1/8
-			else:								username += f"{age}"					# 1/4 * 7/8
+			else:									username += f"{age}"					# 1/4 * 7/8
 		elif random.uniform(0, 1) > 0.66:
 			birth_year = datetime.datetime.now().year - age
 			if random.uniform(0, 1) > 0.875:	username += f"_{birth_year}"			# 1/4 * 1/8
-			else:								username += f"{birth_year}"				# 1/4 * 7/8
+			else:									username += f"{birth_year}"				# 1/4 * 7/8
 		elif random.uniform(0, 1) > 0.5:
 			random_num = random.randint(0, 9)
 			if random.uniform(0, 1) > 0.875:	username += f"_{random_num}"			# 1/4 * 1/8
-			else:								username += f"{random_num}"				# 1/4 * 7/8
+			else:									username += f"{random_num}"				# 1/4 * 7/8
 
 		api_response =	cls.post_request(f"{username}@{domain}", password, "accounts")	# create account
 		address =		api_response["address"]
@@ -235,6 +239,7 @@ class Person:
 		last_name:		str,
 		gender:			str,
 		age:			int,
+		iban:			str,
 		address:		Address,
 		mail_account:	Mail_Account
 	) -> None:
@@ -242,11 +247,12 @@ class Person:
 		self.__last_name =		last_name
 		self.__gender =			gender
 		self.__age =			age
+		self.__iban =			iban
 		self.__address =		address
 		self.__mail_account =	mail_account
 
-	def __str__(self: object) -> str:				return f"{self.name}\n{self.gender} {self.age}\n{self.mail_account}\n{self.address}"
-	def __repr__(self: object) -> str:				return f"<{self.first_name}, {self.last_name}, {self.gender}, {self.age}, {repr(self.address)}, {repr(self.mail_account)}>"
+	def __str__(self: object) -> str:				return f"{self.name}\n{self.gender} {self.age}\n{self.iban}\n{self.mail_account}\n{self.address}"
+	def __repr__(self: object) -> str:				return f"<{self.first_name}, {self.last_name}, {self.gender}, {self.age}, {self.iban}, {repr(self.address)}, {repr(self.mail_account)}>"
 
 	@property  # make all member variables read only
 	def first_name(self: object) -> str:			return self.__first_name
@@ -258,6 +264,8 @@ class Person:
 	def gender(self: object) -> str:				return self.__gender
 	@property
 	def age(self: object) -> int:					return self.__age
+	@property
+	def iban(self: object) -> str:					return self.__iban
 	@property
 	def mail_address(self: object) -> str:			return self.__mail_account.address
 	@property
@@ -287,7 +295,7 @@ class Person:
 def address_gen() -> Address:
 	while True:
 		zip_code, min_n, max_n, n_type, street, city, province = \
-		linecache.getline(ADDRESS_TABLE_PATH, random.randint(1, 471994)).replace("\n", "").split(", ")
+			linecache.getline(ADDRESS_TABLE_PATH, random.randint(1, 471994)).replace("\n", "").split(", ")
 		min_n = int(min_n)
 		max_n = int(max_n)
 		if n_type == "mixed":	num = random.randint(min_n, max_n)
@@ -295,28 +303,68 @@ def address_gen() -> Address:
 		yield Address(province, city, street, num, zip_code)
 
 
+def iban_gen() -> str:
+	accounts = banks = None
+	with open(IBAN_TABLE_PATH, "r") as file:
+		accounts, banks = json.load(file)
+		file.close()
+
+	def replace(x: str) -> str:
+		return "".join(
+			[str(ord(i) - 55) if 64 < ord(i) < 91 else i for i in x]
+		)
+
+	def checksum(x: str) -> str:
+		while len(x) > 12: x = str(int(x[:12]) % 97) + x[12:]
+		return str(98 - (int(x[:12]) % 97)).rjust(2, "O")
+
+	while True:
+		bank = random.choice(banks)
+		account = random.choice(accounts)
+		rand = bank + account + "NL00"
+		check = checksum(replace(rand))
+		yield "NL" + check + bank + account
+
+
 def password_gen(_len: int = 6) -> str:
 		chars = string.ascii_letters + string.digits
 		while True: yield "".join([random.choice(chars) for _ in range(_len)])
 
 
+def image_gen(size: int = 128, interpolation: int = cv2.INTER_LINEAR) -> cv2.typing.MatLike:
+	resize = functools.partial(cv2.resize, interpolation=interpolation)
+	image_size = (size, size)
+	while True:
+		raw = requests.get("https://thispersondoesnotexist.com/").content
+		img = cv2.imdecode(
+			np.frombuffer(raw, np.uint8),
+			cv2.IMREAD_COLOR
+		)
+		yield resize(img, image_size)
+	# TODO: https://www.geeksforgeeks.org/age-and-gender-detection-using-opencv-in-python/
+
+
 class info_gen:		# generator like object
 	NAME_TABLE =	None
 	ADDRESS_GEN =	None
+	IBAN_GEN =		None
 
 	def __init__(
 		self: object,
 		min_age: int = 18,
 		max_age: int = 80,
-		password_len: int = 6
+		password_len: int = 6,
+		image_size: int = 128,
+		cv2_interpolation: int = cv2.INTER_LINEAR
 	) -> None:
 		if not self.NAME_TABLE:
 			with open(NAME_TABLE_PATH, "r") as file:
 				self.NAME_TABLE = json.load(file)
 				file.close()
-		if not self.ADDRESS_GEN:
-			self.ADDRESS_GEN = address_gen()
+		if not self.ADDRESS_GEN:	self.ADDRESS_GEN =	address_gen()
+		if not self.IBAN_GEN:		self.IBAN_GEN =		iban_gen()
 		self.__password_gen = password_gen(password_len)
+		self.__image_gen = image_gen(image_size, cv2_interpolation)
 		self.min_age = min_age
 		self.max_age = max_age
 
@@ -326,14 +374,19 @@ class info_gen:		# generator like object
 		first_name, gender =	random.choice(self.NAME_TABLE[0])
 		last_name =				random.choice(self.NAME_TABLE[1])
 		age =					random.randint(self.min_age, self.max_age)
+		iban =					next(self.IBAN_GEN)
 		address =				next(self.ADDRESS_GEN)
 		mail_account =			Mail_Account.new_account(first_name, last_name, age, self.new_password)
-		return Person(first_name, last_name, gender, age, address, mail_account)
+		return Person(first_name, last_name, gender, age, iban, address, mail_account)
 
 	@property
 	def password_gen(self: object) -> object:	return self.__password_gen
 	@property
 	def new_password(self: object) -> str:		return next(self.__password_gen)
+	@property
+	def image_gen(self: object) -> object:		return self.__image_gen
+	@property
+	def new_image(self: object) -> str:			return next(self.__image_gen)
 
 
 
@@ -348,6 +401,7 @@ class info_encoder(json.JSONEncoder):
 				"last_name":	obj.last_name,
 				"gender":		obj.gender,
 				"age":			obj.age,
+				"iban":			obj.iban,
 				"address":		self.default(obj.address),
 				"mail_account":	self.default(obj.mail_account)
 			}
@@ -395,6 +449,7 @@ class info_decoder(json.JSONDecoder):
 				data["last_name"],
 				data["gender"],
 				data["age"],
+				data["iban"],
 				self.default(data["address"]),
 				self.default(data["mail_account"])
 			)
@@ -406,4 +461,3 @@ class info_decoder(json.JSONDecoder):
 		try:	return Address(**data)
 		except:	pass
 		return	data
-		

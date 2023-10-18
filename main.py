@@ -1,13 +1,16 @@
+import cv2
+
 from info_gen import *
-import json
 
 
 if __name__ == "__main__":
-	g = info_gen()
-	p = next(g)
+	info = info_gen()
+	password = info.password_gen
+	image = info.image_gen
 
-	data = json.dumps(p, cls=info_encoder)
-	p2 = json.loads(data, cls=info_decoder)
-	print(p, p2, sep="\n\n")
+	pic = next(image)
+	print(next(info), next(password), pic.tobytes(), sep="\n\n")
+	cv2.imwrite("img.jpeg", pic)
 
-	# TODO: phone, iban, photo (this person does not exist)
+# print(image.tobytes)
+# TODO: analize photo and base person of of it
