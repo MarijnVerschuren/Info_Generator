@@ -1,6 +1,7 @@
 """
 		imports
 """
+from typing import *
 import numpy as np
 import linecache
 import functools
@@ -292,7 +293,7 @@ class Person:
 """
 		generators
 """
-def address_gen() -> Address:
+def address_gen() -> Generator[Address, None, None]:
 	while True:
 		zip_code, min_n, max_n, n_type, street, city, province = \
 			linecache.getline(ADDRESS_TABLE_PATH, random.randint(1, 471994)).replace("\n", "").split(", ")
@@ -303,7 +304,7 @@ def address_gen() -> Address:
 		yield Address(province, city, street, num, zip_code)
 
 
-def iban_gen() -> str:
+def iban_gen() -> Generator[str, None, None]:
 	accounts = banks = None
 	with open(IBAN_TABLE_PATH, "r") as file:
 		accounts, banks = json.load(file)
@@ -326,12 +327,12 @@ def iban_gen() -> str:
 		yield "NL" + check + bank + account
 
 
-def password_gen(_len: int = 6) -> str:
+def password_gen(_len: int = 6) -> Generator[str, None, None]:
 		chars = string.ascii_letters + string.digits
 		while True: yield "".join([random.choice(chars) for _ in range(_len)])
 
 
-def image_gen(size: int = 128, interpolation: int = cv2.INTER_LINEAR) -> cv2.typing.MatLike:
+def image_gen(size: int = 128, interpolation: int = cv2.INTER_LINEAR) -> Generator[cv2.typing.MatLike, None, None]:
 	resize = functools.partial(cv2.resize, interpolation=interpolation)
 	image_size = (size, size)
 	while True:
